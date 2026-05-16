@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Code2,
   CheckCircle,
@@ -9,8 +9,6 @@ import {
   Languages,
   Sparkles,
   Send,
-  Bot,
-  User,
   X,
   Trash2,
   Moon,
@@ -29,7 +27,6 @@ const EMAIL = "mohaned01103099235@gmail.com";
 const ADMIN_PASSWORD =
   import.meta.env.VITE_ADMIN_PASSWORD;
 const REVIEWS_KEY = "webora_reviews";
-const CHAT_KEY = "webora_chat_messages";
 const PROJECTS_KEY = "webora_projects";
 const THEME_KEY = "webora_theme";
 const ADMIN_KEY = "webora_admin_logged";
@@ -47,10 +44,6 @@ const getAdminPasswordHash = async () => {
       byte.toString(16).padStart(2, "0")
     )
     .join("");
-};
-
-const getGeminiApiKey = () => {
-  return import.meta?.env?.VITE_GEMINI_API_KEY || "";
 };
 
 const defaultProjects = {
@@ -125,34 +118,15 @@ export default function App() {
   const [reviewText, setReviewText] = useState("");
   const [reviewMessage, setReviewMessage] = useState("");
   const [reviews, setReviews] = useState([]);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatInput, setChatInput] = useState("");
-  const [isThinking, setIsThinking] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminMsg, setAdminMsg] = useState("");
   const [projects, setProjects] = useState([]);
   const [newProject, setNewProject] = useState({ title: "", desc: "", img: "" });
-  const chatEndRef = useRef(null);
 
   const isArabic = language === "ar";
   const isDark = theme === "dark";
-
-  const welcomeMessage = useMemo(
-    () => ({
-      from: "bot",
-      text: isArabic
-        ? "أهلاً بك 👋 أنا مساعد Webora الذكي. اسألني عن الخدمات، الأسعار، مدة التنفيذ، أو أي فكرة موقع عندك."
-        : "Hello 👋 I am Webora AI assistant. Ask me about services, pricing, delivery time, or your website idea.",
-    }),
-    [isArabic]
-  );
-
-  const [messages, setMessages] = useState(() => {
-    const saved = safeParse(localStorage.getItem(CHAT_KEY), []);
-    return saved.length ? saved : [{ from: "bot", text: "أهلاً بك 👋 أنا مساعد Webora الذكي. اسألني عن الخدمات، الأسعار، مدة التنفيذ، أو أي فكرة موقع عندك." }];
-  });
 
   useEffect(() => {
     document.title = "Webora";
@@ -169,11 +143,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
-
-  useEffect(() => {
-    localStorage.setItem(CHAT_KEY, JSON.stringify(messages));
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   useEffect(() => {
     if (projects.length) {
@@ -234,125 +203,6 @@ export default function App() {
     const updatedReviews = reviews.filter((review) => review.id !== id);
     setReviews(updatedReviews);
     localStorage.setItem(REVIEWS_KEY, JSON.stringify(updatedReviews));
-  };
-
-  const buildLocalReply = (question) => {
-    const q = question.toLowerCase();
-
-    if (q.includes("سعر") || q.includes("تكلفة") || q.includes("كام") || q.includes("price") || q.includes("cost")) {
-      return isArabic
-        ? "السعر بيتحدد حسب نوع الموقع وعدد الصفحات والمميزات المطلوبة. ابعتلنا فكرتك على واتساب وهنقولك أنسب تكلفة."
-        : "Pricing depends on website type, pages, and features. Send your idea on WhatsApp and we will suggest the best cost.";
-    }
-
-    if (q.includes("مدة") || q.includes("وقت") || q.includes("تسليم") || q.includes("delivery") || q.includes("time")) {
-      return isArabic
-        ? "مدة التنفيذ بتختلف حسب حجم المشروع. المواقع التعريفية غالبًا بتخلص خلال أيام قليلة، والمتاجر أو الأنظمة بتحتاج تفاصيل أكتر."
-        : "Delivery time depends on project size. Simple websites can be finished in a few days, while stores and systems need more details.";
-    }
-
-    if (q.includes("خدمات") || q.includes("بتعمل") || q.includes("مواقع") || q.includes("services") || q.includes("website")) {
-      return isArabic
-        ? "Webora بيعمل مواقع شركات، متاجر إلكترونية، مواقع مطاعم وجيمات، بروفايلات شخصية، صفحات هبوط، ولوحات تحكم."
-        : "Webora builds company websites, e-commerce stores, restaurant and gym websites, portfolios, landing pages, and dashboards.";
-    }
-
-    if (q.includes("تواصل") || q.includes("واتساب") || q.includes("رقم") || q.includes("phone") || q.includes("contact")) {
-      return isArabic
-        ? `تقدر تتواصل واتساب أو اتصال على ${PHONE} أو عبر البريد ${EMAIL}.`
-        : `You can contact us by WhatsApp or phone at ${PHONE}, or email ${EMAIL}.`;
-    }
-
-    return isArabic
-      ? `فهمت سؤالك عن "${question}". Webora يقدر يساعدك في تحويل فكرتك لموقع احترافي. ممكن توضح نوع الموقع اللي عايزه؟`
-      : `I understand your question about "${question}". Webora can help turn your idea into a professional website. What type of website do you need?`;
-  };
-
-  const getBotReply = async (question) => {
-    const apiKey = getGeminiApiKey();
-
-    if (!apiKey) {
-      return buildLocalReply(question);
-    }
-
-    const prompt = `
-أنت مساعد ذكي خاص بموقع Webora.
-
-معلومات الموقع:
-- اسم الموقع: Webora.
-- متخصص في تصميم وتطوير جميع أنواع المواقع الإلكترونية الحديثة.
-- الخدمات: مواقع شركات، متاجر إلكترونية، مواقع مطاعم، مواقع جيم، صفحات هبوط، لوحات تحكم، أنظمة إدارة، تصميم UI/UX، وتطوير Front-End.
-- وسائل التواصل: واتساب/هاتف ${PHONE}، البريد ${EMAIL}.
-- اللغة الحالية للموقع: ${isArabic ? "العربية" : "English"}.
-
-تعليمات الرد:
-- رد بنفس لغة المستخدم أو لغة الموقع.
-- لو الرد عربي استخدم عامية مصرية مهذبة وبسيطة.
-- خلي الرد قصير ومفيد ومقنع.
-- لا تخترع أسعار ثابتة، قل إن السعر حسب التفاصيل.
-- لو المستخدم يسأل خارج مجال الموقع، جاوب بلطف ثم اربط الإجابة بخدمات Webora.
-- لو المستخدم عنده فكرة موقع، اسأله عن عدد الصفحات والمميزات المطلوبة.
-
-سؤال المستخدم:
-${question}
-`;
-
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.85,
-              topK: 40,
-              topP: 0.95,
-              maxOutputTokens: 320,
-            },
-          }),
-        }
-      );
-
-      const data = await response.json();
-      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (reply) return reply;
-
-      return buildLocalReply(question);
-    } catch (error) {
-      console.error("Gemini Chat Error:", error);
-      return buildLocalReply(question);
-    }
-  };
-
-  const sendChatMessage = async () => {
-    const currentMessage = chatInput.trim();
-    if (!currentMessage || isThinking) return;
-
-    setChatInput("");
-    setIsThinking(true);
-
-    setMessages((prev) => [
-      ...prev,
-      { from: "user", text: currentMessage },
-      { from: "bot", text: isArabic ? "جاري التفكير..." : "Thinking...", loading: true },
-    ]);
-
-    const reply = await getBotReply(currentMessage);
-
-    setMessages((prev) => [
-      ...prev.filter((msg) => !msg.loading),
-      { from: "bot", text: reply },
-    ]);
-
-    setIsThinking(false);
-  };
-
-  const clearChat = () => {
-    setMessages([welcomeMessage]);
-    localStorage.setItem(CHAT_KEY, JSON.stringify([welcomeMessage]));
   };
 
   const sha256 = async (text) => {
@@ -441,8 +291,6 @@ const loginAdmin = () => {
       thanksTitle: "رسالة من Webora",
       savedReviews: "التقييمات",
       noReviews: "لا توجد تقييمات حتى الآن. كن أول من يقيّم الموقع.",
-      chatbot: "مساعد الموقع الذكي",
-      chatPlaceholder: "اسأل عن الخدمات أو الأسعار...",
       admin: "لوحة التحكم",
       adminPassword: "كلمة سر الأدمن",
       login: "دخول",
@@ -451,7 +299,6 @@ const loginAdmin = () => {
       projectTitle: "اسم المشروع",
       projectDesc: "وصف المشروع",
       projectImage: "رابط الصورة أو ارفع صورة",
-      clearChat: "مسح الشات",
       resetProjects: "استرجاع المشاريع الأساسية",
     },
     en: {
@@ -476,8 +323,6 @@ const loginAdmin = () => {
       thanksTitle: "Message from Webora",
       savedReviews: "Reviews",
       noReviews: "No reviews yet. Be the first to review the website.",
-      chatbot: "Smart Website Assistant",
-      chatPlaceholder: "Ask about services or pricing...",
       admin: "Admin Panel",
       adminPassword: "Admin password",
       login: "Login",
@@ -486,7 +331,6 @@ const loginAdmin = () => {
       projectTitle: "Project title",
       projectDesc: "Project description",
       projectImage: "Image URL or upload image",
-      clearChat: "Clear chat",
       resetProjects: "Reset default projects",
     },
   };
@@ -845,7 +689,7 @@ const loginAdmin = () => {
 </div>                  <input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && loginAdmin()} placeholder={t.adminPassword} style={styles.input} />
                   <button onClick={loginAdmin} style={{ ...styles.button, width: "100%", background: "linear-gradient(135deg, #7c3aed, #2563eb)" }}><Lock size={18} /> {t.login}</button>
                   {adminMsg && <p style={{ color: "#ef4444" }}>{adminMsg}</p>}
-                  <small style={{ color: colors.muted }}>{isArabic ? "ضع كلمة السر في ملف .env باسم VITE_ADMIN_PASSWORD" : "Put the password in .env as VITE_ADMIN_PASSWORD"}</small>
+                  
                 </div>
               ) : (
                 <div className="admin-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
@@ -867,7 +711,6 @@ const loginAdmin = () => {
                   <div style={styles.card}>
                     <h3 style={{ marginTop: 0 }}>{isArabic ? "إعدادات وإدارة" : "Settings & Manage"}</h3>
                     <div style={{ display: "grid", gap: "10px" }}>
-                      <button onClick={clearChat} style={{ ...styles.button, background: "#dc2626" }}><Trash2 size={18} /> {t.clearChat}</button>
                       <button onClick={resetProjects} style={{ ...styles.button, background: "#0891b2" }}>{t.resetProjects}</button>
                       <button onClick={logoutAdmin} style={{ ...styles.button, background: "#475569" }}><LogOut size={18} /> {t.logout}</button>
                     </div>
@@ -893,39 +736,9 @@ const loginAdmin = () => {
         </div>
       )}
 
-      {chatOpen && (
-        <div style={{ position: "fixed", right: isArabic ? "auto" : "24px", left: isArabic ? "24px" : "auto", bottom: "90px", width: "min(380px, calc(100vw - 40px))", background: isDark ? "#020617" : "#ffffff", border: `1px solid ${colors.border}`, borderRadius: "24px", overflow: "hidden", zIndex: 200, boxShadow: "0 25px 70px rgba(0,0,0,.45)" }}>
-          <div style={{ padding: "16px", background: "linear-gradient(135deg, #2563eb, #06b6d4)", display: "flex", justifyContent: "space-between", alignItems: "center", color: "white" }}>
-            <strong style={{ display: "flex", alignItems: "center", gap: "8px" }}><Bot size={20} /> {t.chatbot}</strong>
-            <div style={{ display: "flex", gap: "8px" }}>
-              {isAdmin && (
-                <button onClick={clearChat} title={t.clearChat} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "white", cursor: "pointer", borderRadius: "10px", padding: "5px" }}><Trash2 size={17} /></button>
-              )}
-              <button onClick={() => setChatOpen(false)} style={{ background: "transparent", border: "none", color: "white", cursor: "pointer" }}><X size={20} /></button>
-            </div>
-          </div>
-          <div style={{ padding: "14px", height: "330px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px" }}>
-            {messages.map((msg, index) => (
-              <div key={index} style={{ alignSelf: msg.from === "user" ? "flex-end" : "flex-start", maxWidth: "85%", background: msg.from === "user" ? "#2563eb" : colors.card2, color: msg.from === "user" ? "white" : colors.text, padding: "10px 12px", borderRadius: "16px", fontSize: "14px", border: msg.from === "user" ? "none" : `1px solid ${colors.border}` }}>
-                <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "4px", opacity: 0.9 }}>
-                  {msg.from === "user" ? <User size={14} /> : <Bot size={14} />}
-                  <small>{msg.from === "user" ? "You" : "Webora AI"}</small>
-                </div>
-                <div style={{ whiteSpace: "pre-line" }}>{msg.text}</div>
-              </div>
-            ))}
-            <div ref={chatEndRef} />
-          </div>
-          <div style={{ padding: "12px", borderTop: `1px solid ${colors.border}`, display: "flex", gap: "8px" }}>
-            <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendChatMessage()} placeholder={t.chatPlaceholder} disabled={isThinking} style={{ flex: 1, background: colors.input, border: `1px solid ${colors.border}`, color: colors.text, borderRadius: "14px", padding: "11px", outline: "none" }} />
-            <button onClick={sendChatMessage} disabled={isThinking} style={{ ...styles.button, padding: "10px 13px", background: isThinking ? "#64748b" : "#2563eb" }}><Send size={17} /></button>
-          </div>
-        </div>
-      )}
 
-      <button onClick={() => setChatOpen(true)} style={{ position: "fixed", right: isArabic ? "auto" : "24px", left: isArabic ? "24px" : "auto", bottom: "24px", width: "58px", height: "58px", borderRadius: "50%", border: "none", color: "white", background: "linear-gradient(135deg, #2563eb, #06b6d4)", cursor: "pointer", zIndex: 180, boxShadow: "0 18px 45px rgba(37,99,235,.35)", display: chatOpen ? "none" : "flex", alignItems: "center", justifyContent: "center" }}>
-        <Bot size={27} />
-      </button>
+
+
 
       <footer style={{ textAlign: "center", padding: "30px", borderTop: `1px solid ${colors.border}`, color: colors.muted }}>
         © 2026 Webora - All Rights Reserved
