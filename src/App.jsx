@@ -715,6 +715,48 @@ const loginAdmin = () => {
                       <button onClick={logoutAdmin} style={{ ...styles.button, background: "#475569" }}><LogOut size={18} /> {t.logout}</button>
                     </div>
 
+                    <h3 style={{ marginTop: "22px" }}>{isArabic ? "إدارة التقييمات" : "Manage Reviews"}</h3>
+                    <div style={{ display: "grid", gap: "10px", maxHeight: "260px", overflowY: "auto", marginBottom: "18px" }}>
+                      {reviews.length === 0 ? (
+                        <p style={{ color: colors.muted, margin: 0 }}>
+                          {isArabic ? "لا توجد تقييمات حالياً." : "No reviews yet."}
+                        </p>
+                      ) : (
+                        reviews.map((review) => (
+                          <div
+                            key={`admin-review-${review.id}`}
+                            style={{
+                              background: colors.card2,
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: "14px",
+                              padding: "12px",
+                              display: "grid",
+                              gap: "8px",
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "center" }}>
+                              <strong style={{ color: "#0891b2" }}>{review.name}</strong>
+                              <button
+                                onClick={() => deleteReview(review.id)}
+                                style={{
+                                  background: "rgba(239,68,68,.14)",
+                                  color: "#ef4444",
+                                  border: "1px solid rgba(239,68,68,.25)",
+                                  borderRadius: "10px",
+                                  padding: "8px",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                            <p style={{ margin: 0, color: colors.text }}>{review.text}</p>
+                            <small style={{ color: colors.muted }}>{review.date}</small>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
                     <h3>{isArabic ? "المشاريع الحالية" : "Current Projects"}</h3>
                     <div style={{ display: "grid", gap: "10px", maxHeight: "380px", overflowY: "auto" }}>
                       {projects.map((project, index) => (
