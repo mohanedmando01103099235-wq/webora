@@ -1,184 +1,636 @@
-.counter {
-  font-size: 16px;
-  padding: 5px 10px;
-  border-radius: 5px;
-  color: var(--accent);
-  background: var(--accent-bg);
-  border: 2px solid transparent;
-  transition: border-color 0.3s;
-  margin-bottom: 24px;
+import React, { useEffect, useState } from "react";
+import { initializeApp } from "firebase/app";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  FacebookAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  setPersistence,
+  browserLocalPersistence,
+  signOut,
+} from "firebase/auth";
+import "./index.css";
 
-  &:hover {
-    border-color: var(--accent-border);
+const REVIEWS_KEY = "webora_reviews_clean";
+const REQUESTS_KEY = "webora_requests_clean";
+const USER_KEY = "webora_user_clean";
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "01103099235";
+const PHONE = "01103099235";
+const WHATSAPP = "201103099235";
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+};
+
+const hasFirebase =
+  firebaseConfig.apiKey &&
+  firebaseConfig.authDomain &&
+  firebaseConfig.projectId &&
+  firebaseConfig.appId;
+
+const firebaseApp = hasFirebase ? initializeApp(firebaseConfig) : null;
+const auth = firebaseApp ? getAuth(firebaseApp) : null;
+
+const safeParse = (value, fallback) => {
+  try {
+    return JSON.parse(value || "");
+  } catch {
+    return fallback;
   }
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-}
+};
 
-.hero {
-  position: relative;
+const makeId = () => `WB-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  .base,
-  .framework,
-  .vite {
-    inset-inline: 0;
-    margin: 0 auto;
-  }
+export default function App() {
+  const [lang, setLang] = useState("ar");
+  const [theme, setTheme] = useState("dark");
+  const [reviews, setReviews] = useState(() => safeParse(localStorage.getItem(REVIEWS_KEY), []));
+  const [requests, setRequests] = useState(() => safeParse(localStorage.getItem(REQUESTS_KEY), []));
+  const [currentUser, setCurrentUser] = useState(() => safeParse(localStorage.getItem(USER_KEY), null));
 
-  .base {
-    width: 170px;
-    position: relative;
-    z-index: 0;
-  }
+  const [review, setReview] = useState({ name: "", text: "", image: "" });
+  const [request, setRequest] = useState({ name: "", phone: "", type: "", details: "" });
+  const [message, setMessage] = useState("");
+  const [trackCode, setTrackCode] = useState("");
+  const [trackResult, setTrackResult] = useState(null);
 
-  .framework,
-  .vite {
-    position: absolute;
-  }
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminPass, setAdminPass] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [adminTab, setAdminTab] = useState("requests");
 
-  .framework {
-    z-index: 1;
-    top: 34px;
-    height: 28px;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
-      scale(1.4);
-  }
+  const ar = lang === "ar";
 
-  .vite {
-    z-index: 0;
-    top: 107px;
-    height: 26px;
-    width: auto;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
-      scale(0.8);
-  }
-}
+  const t = {
+    home: ar ? "الرئيسية" : "Home",
+    services: ar ? "الخدمات" : "Services",
+    works: ar ? "الأعمال" : "Works",
+    reviews: ar ? "آراء العملاء" : "Reviews",
+    contact: ar ? "تواصل معنا" : "Contact",
+    login: ar ? "تسجيل دخول" : "Login",
+    dashboard: ar ? "لوحة التحكم" : "Dashboard",
+    start: ar ? "ابدأ مشروعك" : "Start Project",
+    hero1: ar ? "نحوّل فكرتك إلى" : "Turn Your Idea Into",
+    hero2: ar ? "موقع احترافي" : "Professional Website",
+    hero3: ar ? "باستخدام الذكاء الاصطناعي" : "Using Artificial Intelligence",
+    heroDesc: ar
+      ? "في Webora نستخدم أحدث تقنيات الذكاء الاصطناعي لتصميم وتطوير مواقع سريعة، احترافية، ومتجاوبة مع جميع الأجهزة."
+      : "At Webora we use AI to design and develop fast, professional, responsive websites.",
+    browse: ar ? "تصفح الأعمال" : "Browse Works",
+    ourServices: ar ? "خدماتنا" : "Our Services",
+    servicesSub: ar ? "نقدم مجموعة متكاملة من الخدمات الرقمية باستخدام الذكاء الاصطناعي" : "Integrated digital services powered by AI",
+    ourWorks: ar ? "أعمالنا" : "Our Works",
+    worksSub: ar ? "بعض من المشاريع التي نفخر بتنفيذها" : "Some projects we are proud of",
+    testimonials: ar ? "ماذا يقول عملاؤنا" : "What Clients Say",
+    request: ar ? "طلب مشروع" : "Project Request",
+    track: ar ? "تتبع الطلب" : "Track Request",
+    addReview: ar ? "أضف تقييمك" : "Add Review",
+    ready: ar ? "جاهز لتحويل فكرتك إلى واقع؟" : "Ready to turn your idea into reality?",
+    readySub: ar ? "ابدأ مشروعك الآن واحصل على استشارة مجانية" : "Start now and get a free consultation",
+    footer: ar ? "نحوّل الأفكار إلى مواقع احترافية باستخدام الذكاء الاصطناعي" : "Turning ideas into professional websites using AI",
+  };
 
-#center {
-  display: flex;
-  flex-direction: column;
-  gap: 25px;
-  place-content: center;
-  place-items: center;
-  flex-grow: 1;
+  const services = [
+    ["🏢", ar ? "مواقع الشركات" : "Company Websites", ar ? "تصميم مواقع احترافية للشركات تعكس هوية علامتك التجارية." : "Professional company websites that reflect your brand."],
+    ["🛒", ar ? "متاجر إلكترونية" : "E-Commerce Stores", ar ? "متاجر احترافية آمنة وسريعة لزيادة مبيعاتك أونلاين." : "Fast secure stores to increase online sales."],
+    ["🧠", ar ? "مواقع الذكاء الاصطناعي" : "AI Websites", ar ? "مواقع ذكية متكاملة مع تقنيات AI الحديثة." : "Smart websites integrated with modern AI."],
+    ["👤", ar ? "بورتفوليو شخصي" : "Personal Portfolio", ar ? "اعرض أعمالك باحترافية واجذب عملاء أكثر." : "Showcase your work professionally."],
+    ["💬", ar ? "شات بوت ذكي" : "AI Chatbot", ar ? "أنظمة رد تلقائي مخصصة لاحتياج مشروعك." : "Custom auto-reply systems for your business."],
+    ["📈", ar ? "تحسين محركات البحث" : "SEO Optimization", ar ? "نرفع موقعك في نتائج البحث ونزيد عدد الزوار." : "Improve ranking and increase visitors."],
+  ];
 
-  @media (max-width: 1024px) {
-    padding: 32px 20px 24px;
-    gap: 18px;
-  }
-}
+  const works = [
+    ["موقع شركة مقاولات", "موقع شركات", "https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=900&auto=format&fit=crop"],
+    ["متجر إلكتروني للأزياء", "متجر إلكتروني", "https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=900&auto=format&fit=crop"],
+    ["منصة تعليمية", "موقع تعليمي", "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=900&auto=format&fit=crop"],
+    ["موقع ذكاء اصطناعي", "AI", "https://images.unsplash.com/photo-1677442136019-21780ecad995?q=80&w=900&auto=format&fit=crop"],
+  ];
 
-#next-steps {
-  display: flex;
-  border-top: 1px solid var(--border);
-  text-align: left;
+  const defaultReviews = [
+    ["أحمد محمد", "تعامل راقي وسرعة في التنفيذ، الموقع فاق توقعاتي.", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=300&auto=format&fit=crop"],
+    ["سارة علي", "تصميم احترافي ومنظم جدًا، أنصح الجميع بالتعامل معهم.", "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=300&auto=format&fit=crop"],
+    ["محمد خالد", "خدمة ممتازة وتنفيذ منظم واحترافي.", "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=300&auto=format&fit=crop"],
+  ].map(([name, text, image], index) => ({ id: index + 1, name, text, image }));
 
-  & > div {
-    flex: 1 1 0;
-    padding: 32px;
-    @media (max-width: 1024px) {
-      padding: 24px 20px;
+  const shownReviews = reviews.length ? reviews : defaultReviews;
+
+  useEffect(() => {
+    localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews));
+  }, [reviews]);
+
+  useEffect(() => {
+    localStorage.setItem(REQUESTS_KEY, JSON.stringify(requests));
+  }, [requests]);
+
+  useEffect(() => {
+    if (currentUser) localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
+    else localStorage.removeItem(USER_KEY);
+  }, [currentUser]);
+
+  const saveLoggedUser = (user) => {
+    setCurrentUser({
+      name: user.displayName || user.email || "Webora User",
+      email: user.email || "",
+      photo: user.photoURL || "",
+    });
+    setLoginOpen(false);
+    setAuthError("");
+  };
+
+  useEffect(() => {
+    if (!auth) return;
+
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) saveLoggedUser(result.user);
+      })
+      .catch((err) => {
+        setAuthError(err.message);
+      });
+  }, []);
+
+  const providerLogin = async (type) => {
+    setAuthError("");
+    if (!auth) {
+      setAuthError(ar ? "بيانات Firebase غير موجودة في ملف .env" : "Firebase config is missing in .env");
+      return;
     }
-  }
 
-  .icon {
-    margin-bottom: 16px;
-    width: 22px;
-    height: 22px;
-  }
+    try {
+      await setPersistence(auth, browserLocalPersistence);
 
-  @media (max-width: 1024px) {
-    flex-direction: column;
-    text-align: center;
-  }
-}
+      const provider = type === "facebook" ? new FacebookAuthProvider() : new GoogleAuthProvider();
 
-#docs {
-  border-right: 1px solid var(--border);
+      if (type === "google") {
+        provider.setCustomParameters({
+          prompt: "select_account",
+        });
+      }
 
-  @media (max-width: 1024px) {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-}
+      const result = await signInWithPopup(auth, provider);
+      saveLoggedUser(result.user);
+    } catch (err) {
+      const code = err?.code || "";
 
-#next-steps ul {
-  list-style: none;
-  padding: 0;
-  display: flex;
-  gap: 8px;
-  margin: 32px 0 0;
+      if (code === "auth/popup-closed-by-user") {
+        setAuthError(ar ? "تم إغلاق نافذة التسجيل قبل إكمال الدخول. اضغط Google مرة أخرى وكمل اختيار الحساب." : "The sign-in popup was closed before completion. Click Google again and complete sign-in.");
+        return;
+      }
 
-  .logo {
-    height: 18px;
-  }
+      if (code === "auth/popup-blocked" || code === "auth/cancelled-popup-request") {
+        try {
+          const provider = type === "facebook" ? new FacebookAuthProvider() : new GoogleAuthProvider();
+          if (type === "google") provider.setCustomParameters({ prompt: "select_account" });
+          await signInWithRedirect(auth, provider);
+          return;
+        } catch (redirectErr) {
+          setAuthError(redirectErr.message);
+          return;
+        }
+      }
 
-  a {
-    color: var(--text-h);
-    font-size: 16px;
-    border-radius: 6px;
-    background: var(--social-bg);
-    display: flex;
-    padding: 6px 12px;
-    align-items: center;
-    gap: 8px;
-    text-decoration: none;
-    transition: box-shadow 0.3s;
-
-    &:hover {
-      box-shadow: var(--shadow);
+      setAuthError(err?.message || (ar ? "حدث خطأ أثناء تسجيل الدخول" : "Login error"));
     }
-    .button-icon {
-      height: 18px;
-      width: 18px;
-    }
-  }
+  };
 
-  @media (max-width: 1024px) {
-    margin-top: 20px;
-    flex-wrap: wrap;
-    justify-content: center;
+  const logoutUser = async () => {
+    try {
+      if (auth) await signOut(auth);
+    } catch {}
+    setCurrentUser(null);
+  };
 
-    li {
-      flex: 1 1 calc(50% - 8px);
-    }
+  const uploadImage = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setReview((p) => ({ ...p, image: reader.result }));
+    reader.readAsDataURL(file);
+  };
 
-    a {
-      width: 100%;
-      justify-content: center;
-      box-sizing: border-box;
-    }
-  }
-}
+  const addReview = () => {
+    if (!review.name.trim() || !review.text.trim()) return;
+    setReviews([
+      {
+        id: Date.now(),
+        name: review.name,
+        text: review.text,
+        image: review.image || "https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=300&auto=format&fit=crop",
+      },
+      ...reviews,
+    ]);
+    setReview({ name: "", text: "", image: "" });
+  };
 
-#spacer {
-  height: 88px;
-  border-top: 1px solid var(--border);
-  @media (max-width: 1024px) {
-    height: 48px;
-  }
-}
+  const submitRequest = () => {
+    if (!request.name || !request.phone || !request.type || !request.details) return;
+    const id = makeId();
+    const status = ar ? "تم استلام الطلب" : "Request received";
+    setRequests([
+      {
+        id,
+        ...request,
+        status,
+        updates: [{ id: Date.now(), text: status, date: new Date().toLocaleString(ar ? "ar-EG" : "en-US") }],
+      },
+      ...requests,
+    ]);
+    setRequest({ name: "", phone: "", type: "", details: "" });
+    setMessage(ar ? `تم إرسال طلبك ✅ رقم التتبع: ${id}` : `Request sent ✅ ID: ${id}`);
+  };
 
-.ticks {
-  position: relative;
-  width: 100%;
+  const trackRequest = () => {
+    setTrackResult(requests.find((r) => r.id.toLowerCase() === trackCode.trim().toLowerCase()) || null);
+  };
 
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    top: -4.5px;
-    border: 5px solid transparent;
-  }
+  const addUpdate = (id, value) => {
+    if (!value.trim()) return;
+    setRequests((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status: value,
+              updates: [
+                { id: Date.now(), text: value, date: new Date().toLocaleString(ar ? "ar-EG" : "en-US") },
+                ...(r.updates || []),
+              ],
+            }
+          : r
+      )
+    );
+  };
 
-  &::before {
-    left: 0;
-    border-left-color: var(--border);
-  }
-  &::after {
-    right: 0;
-    border-right-color: var(--border);
-  }
+
+  const openWhatsAppToClient = (phone, id) => {
+    const cleanPhone = (phone || "").replace(/\D/g, "");
+    const target = cleanPhone.startsWith("20") ? cleanPhone : `2${cleanPhone}`;
+    const msg = ar
+      ? `مرحباً، معك Webora بخصوص مشروعك رقم ${id}. نحب نبلغك بآخر تطورات الموقع.`
+      : `Hello, this is Webora regarding your project ${id}. We would like to update you on the project progress.`;
+    window.open(`https://wa.me/${target}?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
+  const callClient = (phone) => {
+    window.location.href = `tel:${phone}`;
+  };
+
+  return (
+    <main className={`app ${theme}`} dir={ar ? "rtl" : "ltr"}>
+      <nav className="top-nav">
+        <a className="logo" href="#home"><span>W</span> WEBORA</a>
+        <div className="links">
+          <a className="active" href="#home">{t.home}</a>
+          <a href="#services">{t.services}</a>
+          <a href="#works">{t.works}</a>
+          <a href="#reviews">{t.reviews}</a>
+          <a href="#contact">{t.contact}</a>
+        </div>
+        <div className="actions">
+          <button onClick={() => setLang(ar ? "en" : "ar")}>{ar ? "English" : "العربية"}</button>
+          <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀️" : "🌙"}</button>
+          <button onClick={() => setAdminOpen(true)}>{t.dashboard}</button>
+          {currentUser ? (
+            <div className="user-menu">
+              {currentUser.photo ? (
+                <img src={currentUser.photo} alt={currentUser.name} />
+              ) : (
+                <span className="user-avatar-letter">{(currentUser.name || "U").charAt(0)}</span>
+              )}
+              <div>
+                <b>{currentUser.name}</b>
+                <small>{currentUser.email}</small>
+              </div>
+              <button onClick={logoutUser}>{ar ? "خروج" : "Logout"}</button>
+            </div>
+          ) : (
+            <button onClick={() => setLoginOpen(true)}>{t.login}</button>
+          )}
+          <a href="#request">{t.start}</a>
+        </div>
+      </nav>
+
+      <section id="home" className="hero">
+        <div className="hero-text">
+          <h1>{t.hero1}<br/><span>{t.hero2}</span><small>{t.hero3}</small></h1>
+          <p>{t.heroDesc}</p>
+          <div className="hero-buttons">
+            <a className="btn main" href="#request">{t.start}</a>
+            <a className="btn ghost" href="#works">{t.browse}</a>
+          </div>
+          <div className="features">
+            <span>🖥️ {ar ? "تصميم متجاوب" : "Responsive"}</span>
+            <span>⚡ {ar ? "تسليم سريع" : "Fast delivery"}</span>
+            <span>🎧 {ar ? "دعم فني 24/7" : "24/7 Support"}</span>
+          </div>
+          {currentUser && <p className="welcome">{ar ? "مرحباً" : "Welcome"} {currentUser.name}</p>}
+        </div>
+
+        <div className="hero-art">
+          <div className="screen-card">
+            <div className="screen-top"><b>WEBORA</b><i></i><i></i><i></i></div>
+            <h2>AI POWERED<br/>WEB SOLUTIONS</h2>
+            <p></p><p></p><p className="small"></p>
+            <button>Get Started</button>
+          </div>
+          <div className="robot">
+            <div className="robot-head"><b></b><b></b></div>
+            <div className="robot-body"></div>
+          </div>
+          <div className="bubble">👋 مرحباً!<br/><small>كيف أساعدك اليوم؟</small></div>
+        </div>
+      </section>
+
+      <section id="services" className="panel">
+        <header>
+          <h2>{t.ourServices}</h2>
+          <p>{t.servicesSub}</p>
+        </header>
+        <div className="services">
+          {services.map(([icon, title, desc]) => (
+            <article key={title}>
+              <div className="service-icon">{icon}</div>
+              <h3>{title}</h3>
+              <p>{desc}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="works" className="panel">
+        <header>
+          <h2>{t.ourWorks}</h2>
+          <p>{t.worksSub}</p>
+        </header>
+        <div className="works">
+          {works.map(([title, tag, img]) => (
+            <article key={title}>
+              <img src={img} alt={title}/>
+              <h3>{title}</h3>
+              <p>{tag}</p>
+            </article>
+          ))}
+        </div>
+        <div className="center"><a className="btn ghost" href="#request">عرض جميع الأعمال</a></div>
+      </section>
+
+      <section id="reviews" className="panel">
+        <header>
+          <h2>{t.testimonials}</h2>
+          <p>{ar ? "ثقة عملائنا هي ما يدفعنا للاستمرار في التميز" : "Our clients' trust drives us forward"}</p>
+        </header>
+        <div className="reviews">
+          {shownReviews.slice(0, 3).map((r) => (
+            <article key={r.id}>
+              <div className="person">
+                <img src={r.image} alt={r.name}/>
+                <div><h3>{r.name}</h3><span>عميل Webora</span></div>
+              </div>
+              <div className="stars">★★★★★</div>
+              <p>"{r.text}"</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="request" className="forms">
+        <div className="box">
+          <h2>{t.request}</h2>
+          {message && <p className="success">{message}</p>}
+          <div className="grid">
+            <input placeholder={ar ? "اسمك" : "Your name"} value={request.name} onChange={(e) => setRequest({ ...request, name: e.target.value })}/>
+            <input placeholder={ar ? "رقم الهاتف" : "Phone"} value={request.phone} onChange={(e) => setRequest({ ...request, phone: e.target.value })}/>
+            <select value={request.type} onChange={(e) => setRequest({ ...request, type: e.target.value })}>
+              <option value="">{ar ? "نوع الموقع" : "Website type"}</option>
+              <option>{ar ? "موقع شركة" : "Company Website"}</option>
+              <option>{ar ? "متجر إلكتروني" : "E-commerce"}</option>
+              <option>{ar ? "بورتفوليو" : "Portfolio"}</option>
+            </select>
+          </div>
+          <textarea placeholder={ar ? "تفاصيل المشروع" : "Project details"} value={request.details} onChange={(e) => setRequest({ ...request, details: e.target.value })}></textarea>
+          <button className="btn main" onClick={submitRequest}>إرسال</button>
+        </div>
+
+        <div className="box">
+          <h2>{t.track}</h2>
+          <div className="track">
+            <input placeholder="WB-1234" value={trackCode} onChange={(e) => setTrackCode(e.target.value)}/>
+            <button className="btn main" onClick={trackRequest}>تتبع</button>
+          </div>
+          {trackResult && (
+            <div className="result">
+              <h3>{trackResult.id}</h3>
+              <p>{trackResult.status}</p>
+              {(trackResult.updates || []).map((u) => <div key={u.id} className="update"><b>{u.text}</b><small>{u.date}</small></div>)}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section id="contact" className="contact">
+        <div className="box">
+          <h2>{t.addReview}</h2>
+          <input placeholder={ar ? "اسمك" : "Your name"} value={review.name} onChange={(e) => setReview({ ...review, name: e.target.value })}/>
+          <label className="upload">📷 {ar ? "ارفع صورتك" : "Upload photo"}<input type="file" accept="image/*" onChange={uploadImage}/></label>
+          {review.image && <img className="preview" src={review.image} alt="preview"/>}
+          <textarea placeholder={ar ? "اكتب رأيك" : "Your review"} value={review.text} onChange={(e) => setReview({ ...review, text: e.target.value })}></textarea>
+          <button className="btn main" onClick={addReview}>إرسال</button>
+        </div>
+
+        <div className="cta">
+          <h2>{t.ready}</h2>
+          <p>{t.readySub}</p>
+          <a className="btn main" href="#request">ابدأ الآن مجاناً</a>
+          <div className="contact-buttons">
+            <a className="whatsapp-btn" href={`https://wa.me/${WHATSAPP}`} target="_blank" rel="noreferrer">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" />
+              واتساب: {PHONE}
+            </a>
+            <a className="phone-btn" href={`tel:${PHONE}`}>
+              <span>☎</span>
+              اتصال: {PHONE}
+            </a>
+          </div>
+          <span className="rocket">🚀</span>
+        </div>
+      </section>
+
+      <footer>
+        <div>
+          <a className="logo" href="#home"><span>W</span> WEBORA</a>
+          <p>{t.footer}</p>
+        </div>
+        <div><h3>روابط سريعة</h3><a href="#home">الرئيسية</a><a href="#services">الخدمات</a><a href="#works">الأعمال</a></div>
+        <div><h3>خدماتنا</h3><a>مواقع الشركات</a><a>متاجر إلكترونية</a><a>مواقع الذكاء الاصطناعي</a></div>
+        <div>
+          <h3>تواصل معنا</h3>
+          <a className="footer-contact" href={`https://wa.me/${WHATSAPP}`} target="_blank" rel="noreferrer">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" />
+            واتساب: {PHONE}
+          </a>
+          <a className="footer-contact" href={`tel:${PHONE}`}>
+            <span>☎</span>
+            هاتف: {PHONE}
+          </a>
+          <a>القاهرة، مصر</a>
+        </div>
+      </footer>
+
+      {loginOpen && (
+        <div className="modal login-overlay">
+          <div className="admin login-modal">
+            <button className="close" onClick={() => setLoginOpen(false)}>×</button>
+            <h2>{t.login}</h2>
+            <p className="login-title-hint">{ar ? "سجّل بحسابك وسيظهر اسمك وصورتك وإيميلك في الهيدر." : "Sign in and your name, photo, and email will appear in the header."}</p>
+            {authError && <p className="error">{authError}</p>}
+            <p className="login-hint">{ar ? "اختار طريقة الدخول وكمل من النافذة الرسمية." : "Choose a sign-in method and continue in the official window."}</p>
+            <button className="social-login google" onClick={() => providerLogin("google")}>
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
+              {ar ? "تسجيل الدخول بجوجل" : "Continue with Google"}
+            </button>
+            <button className="social-login facebook" onClick={() => providerLogin("facebook")}>
+              <img src="https://upload.wikimedia.org/wikipedia/commons/0/05/Facebook_Logo_%282019%29.png" alt="Facebook" />
+              {ar ? "تسجيل الدخول بفيسبوك" : "Continue with Facebook"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {adminOpen && (
+        <div className="modal">
+          <div className="admin dashboard-modal">
+            <button className="close" onClick={() => setAdminOpen(false)}>×</button>
+            {!isAdmin ? (
+              <>
+                <h2>{t.dashboard}</h2>
+                <input type="password" placeholder="كلمة سر لوحة التحكم" value={adminPass} onChange={(e) => setAdminPass(e.target.value)}/>
+                <button className="btn main" onClick={() => setIsAdmin(adminPass === ADMIN_PASSWORD)}>دخول</button>
+              </>
+            ) : (
+              <>
+                <div className="dashboard-head">
+                  <div>
+                    <h2>{t.dashboard}</h2>
+                    <p>{ar ? "تحكم كامل في الطلبات والتقييمات والتواصل مع العملاء." : "Full control over requests, reviews, and client communication."}</p>
+                  </div>
+                  <button className="logout-admin" onClick={() => setIsAdmin(false)}>{ar ? "خروج الأدمن" : "Admin Logout"}</button>
+                </div>
+
+                <div className="dashboard-stats">
+                  <div><b>{requests.length}</b><span>{ar ? "طلبات" : "Requests"}</span></div>
+                  <div><b>{reviews.length}</b><span>{ar ? "تقييمات" : "Reviews"}</span></div>
+                  <div><b>{requests.filter((r) => r.status).length}</b><span>{ar ? "قيد المتابعة" : "Tracked"}</span></div>
+                </div>
+
+                <div className="dashboard-tabs">
+                  <button className={adminTab === "requests" ? "active-tab" : ""} onClick={() => setAdminTab("requests")}>
+                    {ar ? "إدارة الطلبات" : "Manage Requests"}
+                  </button>
+                  <button className={adminTab === "reviews" ? "active-tab" : ""} onClick={() => setAdminTab("reviews")}>
+                    {ar ? "إدارة التقييمات" : "Manage Reviews"}
+                  </button>
+                  <button className={adminTab === "site" ? "active-tab" : ""} onClick={() => setAdminTab("site")}>
+                    {ar ? "إعدادات الموقع" : "Site Settings"}
+                  </button>
+                </div>
+
+                {adminTab === "requests" && (
+                  <div>
+                    <h3>{ar ? "طلبات العملاء" : "Client Requests"}</h3>
+                    {requests.length === 0 && <p>{ar ? "لا توجد طلبات حتى الآن" : "No requests yet"}</p>}
+                    {requests.map((r) => (
+                      <div className="admin-item request-admin-card" key={r.id}>
+                        <div className="admin-row">
+                          <div>
+                            <b>{r.id}</b>
+                            <p>{r.name} - {r.phone}</p>
+                            <p>{r.type}</p>
+                            <small>{r.details}</small>
+                          </div>
+                          <span className="status-badge">{r.status}</span>
+                        </div>
+
+                        <input
+                          placeholder={ar ? "اكتب آخر تطور في المشروع واضغط Enter" : "Write project update and press Enter"}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              addUpdate(r.id, e.currentTarget.value);
+                              e.currentTarget.value = "";
+                            }
+                          }}
+                        />
+
+                        <div className="admin-actions">
+                          <button className="whatsapp-action" onClick={() => openWhatsAppToClient(r.phone, r.id)}>
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" />
+                            {ar ? "تواصل واتساب" : "WhatsApp"}
+                          </button>
+                          <button className="call-action" onClick={() => callClient(r.phone)}>
+                            ☎ {ar ? "اتصال" : "Call"}
+                          </button>
+                          <button className="delete-action" onClick={() => setRequests(requests.filter((x) => x.id !== r.id))}>
+                            {ar ? "حذف الطلب" : "Delete"}
+                          </button>
+                        </div>
+
+                        <div className="updates-list">
+                          {(r.updates || []).slice(0, 4).map((u) => (
+                            <div className="update-mini" key={u.id}>
+                              <b>{u.text}</b>
+                              <small>{u.date}</small>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {adminTab === "reviews" && (
+                  <div>
+                    <h3>{ar ? "تقييمات العملاء" : "Client Reviews"}</h3>
+                    {reviews.length === 0 && <p>{ar ? "لا توجد تقييمات مضافة من المستخدمين" : "No user reviews yet"}</p>}
+                    {reviews.map((r) => (
+                      <div className="admin-item review-admin-card" key={r.id}>
+                        <div className="review-admin-user">
+                          {r.image && <img src={r.image} alt={r.name} />}
+                          <div>
+                            <b>{r.name}</b>
+                            <p>{r.text}</p>
+                          </div>
+                        </div>
+                        <button className="delete-action" onClick={() => setReviews(reviews.filter((x) => x.id !== r.id))}>
+                          {ar ? "حذف التقييم" : "Delete Review"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {adminTab === "site" && (
+                  <div className="admin-item">
+                    <h3>{ar ? "إعدادات الموقع" : "Site Settings"}</h3>
+                    <p>{ar ? "من هنا تقدر تغيّر اللغة والوضع الحالي وتتابع بيانات الموقع." : "Control language, theme, and website information here."}</p>
+                    <div className="admin-actions">
+                      <button onClick={() => setLang(ar ? "en" : "ar")}>{ar ? "تحويل للإنجليزية" : "Switch to Arabic"}</button>
+                      <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{ar ? "تغيير الخلفية" : "Change Background"}</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </main>
+  );
 }
