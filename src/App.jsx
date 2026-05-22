@@ -258,6 +258,7 @@ export default function App() {
 
   const providerLogin = async (type) => {
     setAuthError("");
+
     if (!auth) {
       setAuthError(ar ? "بيانات Firebase غير موجودة في ملف .env" : "Firebase config is missing in .env");
       return;
@@ -266,9 +267,21 @@ export default function App() {
     try {
       await setPersistence(auth, browserLocalPersistence);
 
-      const provider = type === "facebook" ? new FacebookAuthProvider() : new GoogleAuthProvider();
+      let provider;
 
-      if (type === "google") {
+      if (type === "facebook") {
+        provider = new FacebookAuthProvider();
+
+        // مهم: لا تطلب صلاحية email من Facebook لأنها كانت سبب الخطأ Invalid Scopes: email
+        // نطلب public_profile فقط.
+        provider.addScope("public_profile");
+
+        provider.setCustomParameters({
+          display: "popup",
+        });
+      } else {
+        provider = new GoogleAuthProvider();
+
         provider.setCustomParameters({
           prompt: "select_account",
         });
@@ -280,20 +293,38 @@ export default function App() {
       const code = err?.code || "";
 
       if (code === "auth/popup-closed-by-user") {
-        setAuthError(ar ? "تم إغلاق نافذة التسجيل قبل إكمال الدخول. اضغط Google مرة أخرى وكمل اختيار الحساب." : "The sign-in popup was closed before completion. Click Google again and complete sign-in.");
+        setAuthError(ar ? "تم إغلاق نافذة التسجيل قبل إكمال الدخول. اضغط مرة أخرى وكمل اختيار الحساب." : "The sign-in popup was closed before completion. Click again and complete sign-in.");
         return;
       }
 
       if (code === "auth/popup-blocked" || code === "auth/cancelled-popup-request") {
         try {
-          const provider = type === "facebook" ? new FacebookAuthProvider() : new GoogleAuthProvider();
-          if (type === "google") provider.setCustomParameters({ prompt: "select_account" });
+          let provider;
+
+          if (type === "facebook") {
+            provider = new FacebookAuthProvider();
+            provider.addScope("public_profile");
+            provider.setCustomParameters({
+              display: "popup",
+            });
+          } else {
+            provider = new GoogleAuthProvider();
+            provider.setCustomParameters({
+              prompt: "select_account",
+            });
+          }
+
           await signInWithRedirect(auth, provider);
           return;
         } catch (redirectErr) {
           setAuthError(redirectErr.message);
           return;
         }
+      }
+
+      if (code === "auth/unauthorized-domain") {
+        setAuthError(ar ? "الدومين غير مضاف في Firebase Authorized domains." : "This domain is not added in Firebase Authorized domains.");
+        return;
       }
 
       setAuthError(err?.message || (ar ? "حدث خطأ أثناء تسجيل الدخول" : "Login error"));
