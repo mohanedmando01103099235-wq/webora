@@ -3,11 +3,9 @@ import { initializeApp } from "firebase/app";
 import {
   getAuth,
   GoogleAuthProvider,
-  FacebookAuthProvider,
   signInWithPopup,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInWithRedirect,
   getRedirectResult,
   setPersistence,
   browserLocalPersistence,
@@ -74,7 +72,9 @@ export default function App() {
   const [emailForm, setEmailForm] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [profileForm, setProfileForm] = useState({ birth: "", gender: "", country: "" });
+  const [profileForm, setProfileForm] = useState({ username: "", birth: "", gender: "", country: "", language: "en", currency: "USD" });
+  const [showProfilePage, setShowProfilePage] = useState(false);
+  const [profileView, setProfileView] = useState("profile");
   const [adminTab, setAdminTab] = useState("requests");
 
   const ar = lang === "ar";
@@ -264,28 +264,18 @@ export default function App() {
       return;
     }
 
+    if (type !== "google") {
+      setAuthError(ar ? "تم إلغاء تسجيل الدخول بفيسبوك. استخدم Google أو البريد الإلكتروني." : "Facebook login has been removed. Use Google or email instead.");
+      return;
+    }
+
     try {
       await setPersistence(auth, browserLocalPersistence);
 
-      let provider;
-
-      if (type === "facebook") {
-        provider = new FacebookAuthProvider();
-
-        // مهم: لا تطلب صلاحية email من Facebook لأنها كانت سبب الخطأ Invalid Scopes: email
-        // نطلب public_profile فقط.
-        provider.addScope("public_profile");
-
-        provider.setCustomParameters({
-          display: "popup",
-        });
-      } else {
-        provider = new GoogleAuthProvider();
-
-        provider.setCustomParameters({
-          prompt: "select_account",
-        });
-      }
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: "select_account",
+      });
 
       const result = await signInWithPopup(auth, provider);
       saveLoggedUser(result.user);
@@ -295,31 +285,6 @@ export default function App() {
       if (code === "auth/popup-closed-by-user") {
         setAuthError(ar ? "تم إغلاق نافذة التسجيل قبل إكمال الدخول. اضغط مرة أخرى وكمل اختيار الحساب." : "The sign-in popup was closed before completion. Click again and complete sign-in.");
         return;
-      }
-
-      if (code === "auth/popup-blocked" || code === "auth/cancelled-popup-request") {
-        try {
-          let provider;
-
-          if (type === "facebook") {
-            provider = new FacebookAuthProvider();
-            provider.addScope("public_profile");
-            provider.setCustomParameters({
-              display: "popup",
-            });
-          } else {
-            provider = new GoogleAuthProvider();
-            provider.setCustomParameters({
-              prompt: "select_account",
-            });
-          }
-
-          await signInWithRedirect(auth, provider);
-          return;
-        } catch (redirectErr) {
-          setAuthError(redirectErr.message);
-          return;
-        }
       }
 
       if (code === "auth/unauthorized-domain") {
@@ -336,6 +301,7 @@ export default function App() {
       if (auth) await signOut(auth);
     } catch {}
     setCurrentUser(null);
+    setShowProfilePage(false);
   };
 
   const uploadImage = (e) => {
@@ -431,8 +397,14 @@ export default function App() {
       photo: user.photoURL || "",
     });
     setLoginOpen(false);
-    setProfileOpen(true);
+    setProfileOpen(false);
+    setShowProfilePage(true);
+    setProfileView("profile");
     setAuthError("");
+    setTimeout(() => {
+      window.location.hash = "profile";
+      document.getElementById("profile")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
   const emailPasswordAuth = async () => {
@@ -482,7 +454,7 @@ export default function App() {
           </div>
           <button onClick={() => setAdminOpen(true)}>{t.dashboard}</button>
           {currentUser ? (
-            <div className="user-menu">
+            <div className="user-menu" onClick={() => { setShowProfilePage((prev) => !prev); setProfileView("profile"); }} style={{ cursor: "pointer" }}>
               {currentUser.photo ? (
                 <img src={currentUser.photo} alt={currentUser.name} />
               ) : (
@@ -492,7 +464,15 @@ export default function App() {
                 <b>{currentUser.name}</b>
                 <small>{currentUser.email}</small>
               </div>
-              <button onClick={logoutUser}>{ar ? "خروج" : "Logout"}</button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  logoutUser();
+                  setShowProfilePage(false);
+                }}
+              >
+                {ar ? "خروج" : "Logout"}
+              </button>
             </div>
           ) : (
             <button onClick={() => setLoginOpen(true)}>{t.login}</button>
@@ -500,6 +480,351 @@ export default function App() {
           <a href="#request">{t.start}</a>
         </div>
       </nav>
+
+      {currentUser && showProfilePage && (
+        <section
+          id="profile"
+          style={{
+            maxWidth: "980px",
+            margin: "34px auto 28px",
+            padding: "0 18px",
+            color: theme === "light" ? "#111827" : "#f8fafc",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "18px",
+              flexWrap: "wrap",
+              marginBottom: "22px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              {currentUser.photo ? (
+                <img
+                  src={currentUser.photo}
+                  alt={currentUser.name}
+                  style={{
+                    width: "92px",
+                    height: "92px",
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    border: "4px solid #21b8a7",
+                    boxShadow: "0 14px 35px rgba(0,0,0,.18)",
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: "92px",
+                    height: "92px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg,#22c1c3,#2f80ed)",
+                    display: "grid",
+                    placeItems: "center",
+                    color: "#fff",
+                    fontSize: "34px",
+                    fontWeight: "900",
+                    border: "4px solid #21b8a7",
+                  }}
+                >
+                  {(currentUser.name || "U").charAt(0)}
+                </div>
+              )}
+
+              <div>
+                <h2 style={{ margin: "0 0 6px", fontSize: "30px", fontWeight: "900" }}>{currentUser.name}</h2>
+                <p style={{ margin: 0, color: theme === "light" ? "#64748b" : "#cbd5e1", fontSize: "17px" }}>{currentUser.email}</p>
+                <div style={{ marginTop: "8px", color: theme === "light" ? "#334155" : "#e2e8f0", fontSize: "15px" }}>
+                  <b>0</b> Stories&nbsp;&nbsp; <b>0</b> Trips&nbsp;&nbsp; <b>0</b> Favs&nbsp;&nbsp; ⭐ <b>0</b> pts
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                type="button"
+                style={{
+                  padding: "12px 18px",
+                  borderRadius: "12px",
+                  border: "1px solid #e5e7eb",
+                  background: "#fff",
+                  color: "#111827",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+              >
+                ▣ Invoices
+              </button>
+              <button
+                type="button"
+                onClick={logoutUser}
+                style={{
+                  padding: "12px 18px",
+                  borderRadius: "12px",
+                  border: "1px solid #e5e7eb",
+                  background: "#fff",
+                  color: "#111827",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+              >
+                ↪ Sign Out
+              </button>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              flexWrap: "wrap",
+              background: theme === "light" ? "#f3f1ee" : "rgba(255,255,255,.08)",
+              borderRadius: "14px",
+              padding: "8px",
+              marginBottom: "18px",
+            }}
+          >
+            {[
+              ["profile", "👤", "Profile"],
+              ["plans", "♕", "Plans"],
+              ["trips", "✈", "Trips"],
+              ["stories", "📖", "Stories"],
+              ["memories", "▣", "Memories"],
+              ["favs", "♡", "Favs"],
+              ["security", "🛡", "Security"],
+              ["history", "↺", "History"],
+            ].map(([key, icon, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setProfileView(key)}
+                style={{
+                  border: "0",
+                  background: profileView === key ? "#fff" : "transparent",
+                  color: profileView === key ? "#111827" : theme === "light" ? "#64748b" : "#cbd5e1",
+                  borderRadius: "10px",
+                  padding: "10px 22px",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "7px",
+                }}
+              >
+                <span>{icon}</span> {label}
+              </button>
+            ))}
+          </div>
+
+          {profileView === "profile" ? (
+          <div
+            style={{
+              background: theme === "light" ? "#fff" : "rgba(15,23,42,.92)",
+              border: "1px solid rgba(148,163,184,.25)",
+              borderRadius: "18px",
+              padding: "28px",
+              boxShadow: "0 20px 55px rgba(0,0,0,.12)",
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: "20px",
+              }}
+              className="webora-profile-grid"
+            >
+              <label style={{ display: "grid", gap: "8px", fontWeight: "700" }}>
+                Full Name
+                <input
+                  value={currentUser.name}
+                  readOnly
+                  style={{
+                    padding: "15px 18px",
+                    borderRadius: "12px",
+                    border: "1px solid #e5e7eb",
+                    background: theme === "light" ? "#fafafa" : "#111827",
+                    color: theme === "light" ? "#111827" : "#fff",
+                    fontSize: "16px",
+                  }}
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: "8px", fontWeight: "700" }}>
+                Username
+                <input
+                  placeholder="username"
+                  value={profileForm.username}
+                  onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
+                  style={{
+                    padding: "15px 18px",
+                    borderRadius: "12px",
+                    border: "1px solid #e5e7eb",
+                    background: theme === "light" ? "#fafafa" : "#111827",
+                    color: theme === "light" ? "#111827" : "#fff",
+                    fontSize: "16px",
+                  }}
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: "8px", fontWeight: "700" }}>
+                Birthdate
+                <input
+                  type="date"
+                  value={profileForm.birth}
+                  onChange={(e) => setProfileForm({ ...profileForm, birth: e.target.value })}
+                  style={{
+                    padding: "15px 18px",
+                    borderRadius: "12px",
+                    border: "1px solid #e5e7eb",
+                    background: theme === "light" ? "#fafafa" : "#111827",
+                    color: theme === "light" ? "#111827" : "#fff",
+                    fontSize: "16px",
+                  }}
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: "8px", fontWeight: "700" }}>
+                Gender
+                <select
+                  value={profileForm.gender}
+                  onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}
+                  style={{
+                    padding: "15px 18px",
+                    borderRadius: "12px",
+                    border: "1px solid #e5e7eb",
+                    background: theme === "light" ? "#fafafa" : "#111827",
+                    color: theme === "light" ? "#111827" : "#fff",
+                    fontSize: "16px",
+                  }}
+                >
+                  <option value="">Select</option>
+                  <option>Male</option>
+                  <option>Female</option>
+                </select>
+              </label>
+
+              <label style={{ display: "grid", gap: "8px", fontWeight: "700" }}>
+                Country
+                <select
+                  value={profileForm.country}
+                  onChange={(e) => setProfileForm({ ...profileForm, country: e.target.value })}
+                  style={{
+                    padding: "15px 18px",
+                    borderRadius: "12px",
+                    border: "1px solid #e5e7eb",
+                    background: theme === "light" ? "#fafafa" : "#111827",
+                    color: theme === "light" ? "#111827" : "#fff",
+                    fontSize: "16px",
+                  }}
+                >
+                  <option value="">Select country</option>
+                  <option>Egypt</option>
+                  <option>Saudi Arabia</option>
+                  <option>UAE</option>
+                </select>
+              </label>
+
+              <label style={{ display: "grid", gap: "8px", fontWeight: "700" }}>
+                Language
+                <input
+                  value={profileForm.language}
+                  onChange={(e) => setProfileForm({ ...profileForm, language: e.target.value })}
+                  style={{
+                    padding: "15px 18px",
+                    borderRadius: "12px",
+                    border: "1px solid #e5e7eb",
+                    background: theme === "light" ? "#fafafa" : "#111827",
+                    color: theme === "light" ? "#111827" : "#fff",
+                    fontSize: "16px",
+                  }}
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: "8px", fontWeight: "700" }}>
+                Currency
+                <input
+                  value={profileForm.currency}
+                  onChange={(e) => setProfileForm({ ...profileForm, currency: e.target.value })}
+                  style={{
+                    padding: "15px 18px",
+                    borderRadius: "12px",
+                    border: "1px solid #e5e7eb",
+                    background: theme === "light" ? "#fafafa" : "#111827",
+                    color: theme === "light" ? "#111827" : "#fff",
+                    fontSize: "16px",
+                  }}
+                />
+              </label>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => alert(ar ? "تم حفظ التغييرات" : "Changes saved")}
+              style={{
+                marginTop: "22px",
+                border: "0",
+                borderRadius: "13px",
+                padding: "15px 24px",
+                background: "linear-gradient(135deg,#22c1a9,#159c8b)",
+                color: "#fff",
+                fontSize: "17px",
+                fontWeight: "900",
+                cursor: "pointer",
+              }}
+            >
+              ⊙ Save Changes
+            </button>
+          </div>
+          ) : (
+          <div
+            style={{
+              background: theme === "light" ? "#fff" : "rgba(15,23,42,.92)",
+              border: "1px solid rgba(148,163,184,.25)",
+              borderRadius: "18px",
+              padding: "34px",
+              boxShadow: "0 20px 55px rgba(0,0,0,.12)",
+              minHeight: "220px",
+            }}
+          >
+            <h2 style={{ marginTop: 0, fontSize: "28px", fontWeight: "900" }}>
+              {profileView === "plans" ? "Plans" :
+               profileView === "trips" ? "Trips" :
+               profileView === "stories" ? "Stories" :
+               profileView === "memories" ? "Memories" :
+               profileView === "favs" ? "Favorites" :
+               profileView === "security" ? "Security" : "History"}
+            </h2>
+            <p style={{ color: theme === "light" ? "#64748b" : "#cbd5e1", fontSize: "17px", marginBottom: "20px" }}>
+              {profileView === "plans" && "No saved plans yet."}
+              {profileView === "trips" && "No trips yet."}
+              {profileView === "stories" && "No stories yet."}
+              {profileView === "memories" && "No memories yet."}
+              {profileView === "favs" && "No favorites yet."}
+              {profileView === "security" && "Your account is protected with Firebase Authentication."}
+              {profileView === "history" && "No history yet."}
+            </p>
+            {profileView === "security" ? (
+              <div style={{ display: "grid", gap: "12px" }}>
+                <div style={{ padding: "16px", borderRadius: "14px", background: theme === "light" ? "#f8fafc" : "#111827", border: "1px solid rgba(148,163,184,.25)" }}>
+                  <b>Email:</b> {currentUser.email || "Not available"}
+                </div>
+                <div style={{ padding: "16px", borderRadius: "14px", background: theme === "light" ? "#f8fafc" : "#111827", border: "1px solid rgba(148,163,184,.25)" }}>
+                  <b>Login method:</b> Google / Email
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: "20px", borderRadius: "16px", background: theme === "light" ? "#f8fafc" : "#111827", border: "1px solid rgba(148,163,184,.25)" }}>
+                This tab is ready. You can add real data later.
+              </div>
+            )}
+          </div>
+          )}
+        </section>
+      )}
 
       <section id="home" className="hero">
         <div className="hero-text">
@@ -741,11 +1066,6 @@ export default function App() {
               {loginMode === "login" ? t.noAccount : t.haveAccount}
             </button>
 
-            <button className="facebook-mini-btn" onClick={() => providerLogin("facebook")}>
-              <img src="https://upload.wikimedia.org/wikipedia/commons/0/05/Facebook_Logo_%282019%29.png" alt="Facebook" />
-              {t.continueFacebook}
-            </button>
-
             <p className="auth-privacy">
               {t.authPrivacy}
             </p>
@@ -753,39 +1073,6 @@ export default function App() {
         </div>
       )}
 
-
-      {profileOpen && (
-        <div className="modal profile-overlay">
-          <div className="profile-modal">
-            <button className="profile-close" onClick={() => setProfileOpen(false)}>×</button>
-            <h2>{t.completeProfile}</h2>
-            <p>{t.profileOptional}</p>
-
-            <label>{t.birthDate}</label>
-            <input type="date" value={profileForm.birth} onChange={(e) => setProfileForm({ ...profileForm, birth: e.target.value })} />
-
-            <label>{t.gender}</label>
-            <select value={profileForm.gender} onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}>
-              <option value="">{t.selectGender}</option>
-              <option>{t.male}</option>
-              <option>{t.female}</option>
-            </select>
-
-            <label>{t.country}</label>
-            <select value={profileForm.country} onChange={(e) => setProfileForm({ ...profileForm, country: e.target.value })}>
-              <option value="">{t.selectCountry}</option>
-              <option>{t.egypt}</option>
-              <option>{t.saudi}</option>
-              <option>{t.uae}</option>
-            </select>
-
-            <div className="profile-actions">
-              <button onClick={() => setProfileOpen(false)}>{t.save}</button>
-              <button className="skip-btn" onClick={() => setProfileOpen(false)}>{t.skip}</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {adminOpen && (
         <div className="modal">
